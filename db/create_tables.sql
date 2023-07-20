@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS books (
 	book_name VARCHAR NOT NULL,
 	author VARCHAR NOT NULL,
 	summary VARCHAR NOT NULL,
+	price DECIMAL NOT NULL,
 	PRIMARY KEY (id),
     CONSTRAINT fk_upload_id FOREIGN KEY(upload_id) REFERENCES uploads(id)
 );

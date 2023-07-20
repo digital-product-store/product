@@ -54,6 +54,7 @@ books = sqlalchemy.Table(
     sqlalchemy.Column("book_name", sqlalchemy.VARCHAR, nullable=False),
     sqlalchemy.Column("author", sqlalchemy.VARCHAR, nullable=False),
     sqlalchemy.Column("summary", sqlalchemy.VARCHAR, nullable=False),
+    sqlalchemy.Column("price", sqlalchemy.DECIMAL, nullable=False),
 )
 
 engine = sqlalchemy.create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -96,6 +97,7 @@ class BookCreate(BaseModel):
     book_name: str
     author: str
     summary: str
+    price: float
 
 class BookCreated(BookCreate):
     id: str
@@ -103,7 +105,7 @@ class BookCreated(BookCreate):
 @app.post('/admin/api/v1/book', status_code=201)
 async def book_create(book: BookCreate) -> BookCreated:
     book_id = str(uuid.uuid4())
-    query = books.insert().values(id = book_id, upload_id = book.upload_id, book_name = book.book_name, author = book.author, summary = book.summary)
+    query = books.insert().values(id = book_id, upload_id = book.upload_id, book_name = book.book_name, author = book.author, summary = book.summary, price = book.price)
     await database.execute(query)
     output = book.model_dump()
     output['id'] = book_id
@@ -115,12 +117,13 @@ class BookListing(BaseModel):
     book_name: str
     author: str
     summary: str
+    price: float
 
 @app.get('/api/v1/books')
 async def book_list() -> List[BookListing]:
     query = books.select()
     result = await database.fetch_all(query)
-    output = list(map(lambda r: BookListing.model_construct(id = str(r.id), book_name=r.book_name, author=r.author, summary=r.summary), result))
+    output = list(map(lambda r: BookListing.model_construct(id = str(r.id), book_name=r.book_name, author=r.author, summary=r.summary, price=r.price), result))
     return output
 
 class BookDetail(BaseModel):
@@ -131,6 +134,7 @@ class BookDetail(BaseModel):
     book_name: str
     author: str
     summary: str
+    price: float
 
 @app.get('/_private/api/v1/books/{uuid}')
 async def book_detail(uuid: str) -> BookDetail:
@@ -141,7 +145,8 @@ async def book_detail(uuid: str) -> BookDetail:
         uploads.c.original_name,
         books.c.book_name,
         books.c.author,
-        books.c.summary
+        books.c.summary,
+        books.c.price
     ).join(uploads).where(books.c.id == uuid)
     
     result = await database.fetch_one(query)
@@ -155,6 +160,7 @@ async def book_detail(uuid: str) -> BookDetail:
         original_name = result.original_name,
         book_name = result.book_name,
         author = result.author,
-        summary = result.summary
+        summary = result.summary,
+        price = result.price
     )
     return output
