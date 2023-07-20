@@ -70,7 +70,7 @@ async def shutdown():
 
 # TODO: use env var for APM SERVER URL
 apm = make_apm_client({
-    'SERVICE_NAME': 'product-admin',
+    'SERVICE_NAME': 'product',
     'SERVER_URL': ELASTIC_APM_URL,
     'CAPTURE_HEADERS': True,
     'CAPTURE_BODY': 'all',
