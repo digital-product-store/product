@@ -57,7 +57,6 @@ services:
       links:
         - postgresql
         - localstack
-        - apm-server
       depends_on:
         - postgresql
         - localstack
