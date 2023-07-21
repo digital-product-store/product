@@ -28,9 +28,6 @@ services:
         - kibana
     localstack:
       image: localstack/localstack:2.1
-      ports:
-        - "4566:4566"            # LocalStack Gateway
-        - "4510-4559:4510-4559"  # external services port range
       environment:
         - DEBUG=${DEBUG-}
         - DOCKER_HOST=unix:///var/run/docker.sock
@@ -43,8 +40,6 @@ services:
       environment:
         - POSTGRES_USER=postgres
         - POSTGRES_PASSWORD=postgres
-      ports:
-        - '5432:5432'
       volumes: 
         - ./db/create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
         - ./db/listen_all.sh:/docker-entrypoint-initdb.d/listen_all.sh
@@ -54,7 +49,7 @@ services:
         dockerfile: Dockerfile
       image: ads-product:latest
       ports:
-        - "8000:8000"
+        - "8001:8000"
       environment:
         - AWS_S3_ENDPOINT_URL=http://localstack:4566
         - DATABASE_URL=postgresql://postgres:postgres@postgresql:5432/postgres
