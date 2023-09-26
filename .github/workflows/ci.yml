@@ -1,0 +1,36 @@
+name: ci tests
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v3
+        
+      - name: install python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: install dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.dev.txt
+
+      - name: autoflake
+        run: |
+          autoflake --check -r src/
+
+      - name: flake8
+        run: |
+          flake8 src/
+
+      - name: black
+        run: |
+          black --check src/
