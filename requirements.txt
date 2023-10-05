@@ -2,7 +2,7 @@ fastapi==0.103.2
 uvicorn[standard]==0.23.2
 elastic-apm==6.18.0
 python-multipart==0.0.6
-boto3==1.28.59
+boto3==1.28.60
 sqlalchemy==1.4.49
 databases[asyncpg]==0.8.0
 psycopg2-binary==2.9.9
