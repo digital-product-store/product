@@ -24,7 +24,6 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "local")
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
 )
-print(DATABASE_URL)
 
 ELASTIC_APM_URL = os.getenv("ELASTIC_APM_URL", "http://localhost:8200")
 
