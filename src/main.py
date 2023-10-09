@@ -32,7 +32,7 @@ awsclient = boto3.client(
 
 app = FastAPI()
 
-database_url = f"postgresql://{DB_USERNAME}@{DB_ENDPOINT}:5432/{DB_NAME}"
+database_url = f"postgresql://{DB_USERNAME}:postgres@{DB_ENDPOINT}:5432/{DB_NAME}"
 database = databases.Database(database_url)
 
 metadata = sqlalchemy.MetaData()
