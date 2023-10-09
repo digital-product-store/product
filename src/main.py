@@ -27,10 +27,7 @@ ELASTIC_APM_URL = os.getenv("ELASTIC_APM_URL", "http://localhost:8200")
 
 rds_client = boto3.client("rds")
 token = rds_client.generate_db_auth_token(
-    DBHostname=DB_ENDPOINT,
-    Port=5432,
-    DBUsername=DB_USERNAME,
-    Region=AWS_REGION
+    DBHostname=DB_ENDPOINT, Port=5432, DBUsername=DB_USERNAME, Region=AWS_REGION
 )
 database_url = f"postgresql://{DB_USERNAME}:{token}@{DB_ENDPOINT}/{DB_NAME}"
 
