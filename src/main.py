@@ -2,19 +2,25 @@
 
 import os
 import uuid
+from decimal import Decimal
 from typing import List
 
 from elasticapm.contrib.starlette import ElasticAPM, make_apm_client
 
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, UploadFile, Depends, status
 from fastapi.responses import Response
 from pydantic import BaseModel
 
 import boto3
-import databases
 import sqlalchemy
-from sqlalchemy.dialects import postgresql
-from sqlalchemy import select, event
+from sqlalchemy import select, event, text, String, ForeignKey
+from sqlalchemy.orm import (
+    sessionmaker,
+    Session,
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+)
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
 AWS_S3_BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME", "product-uploads")
@@ -32,32 +38,31 @@ awsclient = boto3.client(
 
 app = FastAPI()
 
-database_url = f"postgresql://{DB_USERNAME}:postgres@{DB_ENDPOINT}:5432/{DB_NAME}"
-database = databases.Database(database_url)
+database_url = f"postgresql://{DB_USERNAME}@{DB_ENDPOINT}:5432/{DB_NAME}"
 
-metadata = sqlalchemy.MetaData()
-uploads = sqlalchemy.Table(
-    "uploads",
-    metadata,
-    sqlalchemy.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-    sqlalchemy.Column("object_id", postgresql.UUID, nullable=False),
-    sqlalchemy.Column("original_name", sqlalchemy.String, nullable=False),
-)
-books = sqlalchemy.Table(
-    "books",
-    metadata,
-    sqlalchemy.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-    sqlalchemy.Column(
-        "upload_id",
-        postgresql.UUID,
-        sqlalchemy.ForeignKey("uploads.id"),
-        nullable=False,
-    ),
-    sqlalchemy.Column("book_name", sqlalchemy.VARCHAR, nullable=False),
-    sqlalchemy.Column("author", sqlalchemy.VARCHAR, nullable=False),
-    sqlalchemy.Column("summary", sqlalchemy.VARCHAR, nullable=False),
-    sqlalchemy.Column("price", sqlalchemy.DECIMAL, nullable=False),
-)
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Uploads(Base):
+    __tablename__ = "uploads"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    object_id: Mapped[uuid.UUID]
+    original_name: Mapped[str] = mapped_column(String(64))
+
+
+class Books(Base):
+    __tablename__ = "books"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    upload_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("uploads.id"))
+    book_name: Mapped[str] = mapped_column(String(64))
+    author: Mapped[str] = mapped_column(String(64))
+    summary: Mapped[str] = mapped_column(String(64))
+    price: Mapped[Decimal]
+
 
 engine = sqlalchemy.create_engine(
     database_url, connect_args={"check_same_thread": False}
@@ -74,18 +79,16 @@ def get_db_auth_token():
 
 @event.listens_for(engine, "do_connect")
 def provide_token(dialect, conn_rec, cargs, cparams):
-    cparams['token'] = get_db_auth_token()
+    cparams["token"] = get_db_auth_token()
 
 
-@app.on_event("startup")
-async def startup():
-    # init db
-    await database.connect()
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await database.disconnect()
+def inject_db():
+    session = sessionmaker(engine)
+    db = session()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 # TODO: use env var for APM SERVER URL
@@ -101,22 +104,26 @@ app.add_middleware(ElasticAPM, client=apm)
 
 
 @app.get("/_health")
-async def health_check():
-    return Response(status_code=200)
+def health_check(db: Session = Depends(inject_db)):
+    try:
+        db.execute(text("SELECT 1"))
+    except:  # noqa
+        return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+    else:
+        return Response(status_code=status.HTTP_200_OK)
 
 
 @app.post("/admin/api/v1/upload", status_code=201)
-async def upload_file(file: UploadFile):
-    upload_id = str(uuid.uuid4())
-    object_id = str(uuid.uuid4())
+def upload_file(file: UploadFile, db: Session = Depends(inject_db)):
+    upload_id = uuid.uuid4()
+    object_id = uuid.uuid4()
 
     awsclient.upload_fileobj(file.file, AWS_S3_BUCKET_NAME, object_id)
 
-    query = uploads.insert().values(
-        id=upload_id, object_id=object_id, original_name=file.filename
-    )
-    await database.execute(query)
-    return {"upload_id": str(upload_id), "object_id": object_id}
+    upload = Uploads(id=upload_id, object_id=object_id, original_name=file.filename)
+    db.add(upload)
+    db.commit()
+    return {"upload_id": str(upload_id), "object_id": str(object_id)}
 
 
 class BookCreate(BaseModel):
@@ -132,9 +139,10 @@ class BookCreated(BookCreate):
 
 
 @app.post("/admin/api/v1/book", status_code=201)
-async def book_create(book: BookCreate) -> BookCreated:
-    book_id = str(uuid.uuid4())
-    query = books.insert().values(
+def book_create(book: BookCreate, db: Session = Depends(inject_db)) -> BookCreated:
+    book_id = uuid.uuid4()
+
+    db_book = Books(
         id=book_id,
         upload_id=book.upload_id,
         book_name=book.book_name,
@@ -142,9 +150,12 @@ async def book_create(book: BookCreate) -> BookCreated:
         summary=book.summary,
         price=book.price,
     )
-    await database.execute(query)
+
+    db.add(db_book)
+    db.commit()
+
     output = book.model_dump()
-    output["id"] = book_id
+    output["id"] = str(book_id)
     created = BookCreated(**output)
     return created
 
@@ -156,66 +167,12 @@ class BookListing(BaseModel):
     summary: str
     price: float
 
+    class Config:
+        from_attributes = True
+
 
 @app.get("/api/v1/books")
-async def book_list() -> List[BookListing]:
-    query = books.select()
-    result = await database.fetch_all(query)
-    output = list(
-        map(
-            lambda r: BookListing.model_construct(
-                id=str(r.id),
-                book_name=r.book_name,
-                author=r.author,
-                summary=r.summary,
-                price=r.price,
-            ),
-            result,
-        )
-    )
-    return output
-
-
-class BookDetail(BaseModel):
-    id: str
-    upload_id: str
-    object_id: str
-    original_name: str
-    book_name: str
-    author: str
-    summary: str
-    price: float
-
-
-@app.get("/_private/api/v1/books/{uuid}")
-async def book_detail(uuid: str) -> BookDetail:
-    query = (
-        select(
-            books.c.id,
-            books.c.upload_id,
-            uploads.c.object_id,
-            uploads.c.original_name,
-            books.c.book_name,
-            books.c.author,
-            books.c.summary,
-            books.c.price,
-        )
-        .join(uploads)
-        .where(books.c.id == uuid)
-    )
-
-    result = await database.fetch_one(query)
-    if result is None:
-        return Response(status_code=404)
-
-    output = BookDetail.model_construct(
-        id=str(result.id),
-        upload_id=str(result.upload_id),
-        object_id=str(result.object_id),
-        original_name=result.original_name,
-        book_name=result.book_name,
-        author=result.author,
-        summary=result.summary,
-        price=result.price,
-    )
-    return output
+def book_list(db: Session = Depends(inject_db)) -> List[BookListing]:
+    query = select(Books)
+    result = db.scalars(query).all()
+    return result
