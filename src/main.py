@@ -171,7 +171,7 @@ class BookListing(BaseModel):
         from_attributes = True
 
 
-@app.get("/api/v1/books")
+@app.get("/api/v1/books", response_model=list[BookListing])
 def book_list(db: Session = Depends(inject_db)) -> List[BookListing]:
     query = select(Books)
     result = db.scalars(query).all()
