@@ -162,7 +162,7 @@ def book_create(book: BookCreate, db: Session = Depends(inject_db)) -> BookCreat
 
 
 class BookListing(BaseModel):
-    id: str
+    id: uuid.UUID
     book_name: str
     author: str
     summary: str
