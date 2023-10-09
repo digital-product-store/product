@@ -65,7 +65,7 @@ class Books(Base):
 
 
 engine = sqlalchemy.create_engine(
-    database_url, connect_args={"check_same_thread": False}
+    database_url
 )
 
 
