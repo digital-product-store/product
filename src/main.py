@@ -119,7 +119,7 @@ def upload_file(file: UploadFile, db: Session = Depends(inject_db)):
     upload_id = uuid.uuid4()
     object_id = uuid.uuid4()
 
-    awsclient.upload_fileobj(file.file, AWS_S3_BUCKET_NAME, object_id)
+    awsclient.upload_fileobj(file.file, AWS_S3_BUCKET_NAME, str(object_id))
 
     upload = Uploads(id=upload_id, object_id=object_id, original_name=file.filename)
     db.add(upload)
