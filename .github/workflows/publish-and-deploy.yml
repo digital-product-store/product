@@ -25,3 +25,24 @@ jobs:
           region: eu-west-1
           local-image: product
           image: product:${{ github.sha }}
+
+      - name: install aws-cli v2
+        uses: unfor19/install-aws-cli-action@v1
+
+      - name: install kubectl
+        uses: azure/setup-kubectl@v3
+      
+      - name: install helm
+        uses: azure/setup-helm@v3
+        with:
+          version: "v3.13.0"
+
+      - name: deploy
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.DEPLOYER_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DEPLOYER_AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws eks --region ${{ vars.AWS_REGION }} update-kubeconfig --name ${{ vars.CLUSTER_NAME }}
+          helm repo add digital-product-store ${{ vars.DIGITAL_PRODUCT_STORE_HELM_CHART }}
+          helm repo update
+          helm upgrade product digital-product-store/product --set image.repository=${{ vars.PRODUCT_REPOSITORY }},image.tag=${{ github.sha }},aws.region=${{ vars.AWS_REGION }},aws.bucket_name=${{ vars.UPLOAD_BUCKET_NAME }},aws.role_arn=${{ secrets.PRODUCT_HTTP_ROLE_ARN }},db.endpoint=${{ secrets.PRODUCT_DB_ENDPOINT }},db.username=${{ secrets.PRODUCT_DB_USERNAME }},db.name=${{ secrets.PRODUCT_DB_NAME }},service.host=${{ vars.SERVICE_HOST }}
