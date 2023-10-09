@@ -14,22 +14,16 @@ import boto3
 import databases
 import sqlalchemy
 from sqlalchemy.dialects import postgresql
-from sqlalchemy import select
+from sqlalchemy import select, event
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
 AWS_S3_BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME", "product-uploads")
 
-DB_ENDPOINT = os.getenv("DB_ENDPOINT", "localhost:5432")
+DB_ENDPOINT = os.getenv("DB_ENDPOINT", "localhost")
 DB_USERNAME = os.getenv("DB_USERNAME", "postgres")
 DB_NAME = os.getenv("DB_NAME", "postgres")
 
 ELASTIC_APM_URL = os.getenv("ELASTIC_APM_URL", "http://localhost:8200")
-
-rds_client = boto3.client("rds", region_name=AWS_REGION)
-token = rds_client.generate_db_auth_token(
-    DBHostname=DB_ENDPOINT, Port=5432, DBUsername=DB_USERNAME, Region=AWS_REGION
-)
-database_url = f"postgresql://{token}"
 
 awsclient = boto3.client(
     "s3",
@@ -38,6 +32,7 @@ awsclient = boto3.client(
 
 app = FastAPI()
 
+database_url = f"postgresql://{DB_USERNAME}@{DB_ENDPOINT}:5432/{DB_NAME}"
 database = databases.Database(database_url)
 
 metadata = sqlalchemy.MetaData()
@@ -67,6 +62,19 @@ books = sqlalchemy.Table(
 engine = sqlalchemy.create_engine(
     database_url, connect_args={"check_same_thread": False}
 )
+
+
+def get_db_auth_token():
+    rds_client = boto3.client("rds", region_name=AWS_REGION)
+    token = rds_client.generate_db_auth_token(
+        DBHostname=DB_ENDPOINT, Port=5432, DBUsername=DB_USERNAME, Region=AWS_REGION
+    )
+    return token
+
+
+@event.listens_for(engine, "do_connect")
+def provide_token(dialect, conn_rec, cargs, cparams):
+    cparams['token'] = get_db_auth_token()
 
 
 @app.on_event("startup")
