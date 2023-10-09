@@ -17,27 +17,28 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy import select
 
 AWS_REGION = os.getenv("AWS_REGION", "eu-west-1")
-AWS_S3_ENDPOINT_URL = os.getenv("AWS_S3_ENDPOINT_URL", "http://localhost:4566")
-AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY", "local")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "local")
+AWS_S3_BUCKET_NAME = os.getenv("AWS_S3_BUCKET_NAME", "product-uploads")
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
-)
+DB_ENDPOINT = os.getenv("DB_ENDPOINT", "localhost:5432")
+DB_USERNAME = os.getenv("DB_USERNAME", "postgres")
+DB_NAME = os.getenv("DB_NAME", "postgres")
 
 ELASTIC_APM_URL = os.getenv("ELASTIC_APM_URL", "http://localhost:8200")
+
+rds_client = boto3.client("rds")
+token = rds_client.generate_db_auth_token(
+    DBHostname=DB_ENDPOINT, Port=5432, DBUsername=DB_USERNAME, Region=AWS_REGION
+)
+database_url = f"postgresql://{DB_USERNAME}:{token}@{DB_ENDPOINT}/{DB_NAME}"
 
 awsclient = boto3.client(
     "s3",
     region_name=AWS_REGION,
-    endpoint_url=AWS_S3_ENDPOINT_URL,
-    aws_access_key_id=AWS_ACCESS_KEY,
-    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
 )
 
 app = FastAPI()
 
-database = databases.Database(DATABASE_URL)
+database = databases.Database(database_url)
 
 metadata = sqlalchemy.MetaData()
 uploads = sqlalchemy.Table(
@@ -64,12 +65,13 @@ books = sqlalchemy.Table(
 )
 
 engine = sqlalchemy.create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
+    database_url, connect_args={"check_same_thread": False}
 )
 
 
 @app.on_event("startup")
 async def startup():
+    # init db
     await database.connect()
 
 
@@ -100,7 +102,7 @@ async def upload_file(file: UploadFile):
     upload_id = str(uuid.uuid4())
     object_id = str(uuid.uuid4())
 
-    awsclient.upload_fileobj(file.file, "product-admin-uploads", object_id)
+    awsclient.upload_fileobj(file.file, AWS_S3_BUCKET_NAME, object_id)
 
     query = uploads.insert().values(
         id=upload_id, object_id=object_id, original_name=file.filename
