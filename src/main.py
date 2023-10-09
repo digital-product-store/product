@@ -29,8 +29,7 @@ rds_client = boto3.client("rds", region_name=AWS_REGION)
 token = rds_client.generate_db_auth_token(
     DBHostname=DB_ENDPOINT, Port=5432, DBUsername=DB_USERNAME, Region=AWS_REGION
 )
-print(token)
-database_url = f"postgresql://{DB_USERNAME}:{token}@{DB_ENDPOINT}:5432/{DB_NAME}"
+database_url = f"postgresql://{token}"
 
 awsclient = boto3.client(
     "s3",
