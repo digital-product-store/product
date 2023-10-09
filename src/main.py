@@ -107,7 +107,8 @@ app.add_middleware(ElasticAPM, client=apm)
 def health_check(db: Session = Depends(inject_db)):
     try:
         db.execute(text("SELECT 1"))
-    except:  # noqa
+    except Exception as e:  # noqa
+        print(e)
         return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
     else:
         return Response(status_code=status.HTTP_200_OK)
