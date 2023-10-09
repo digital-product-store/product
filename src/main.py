@@ -79,7 +79,7 @@ def get_db_auth_token():
 
 @event.listens_for(engine, "do_connect")
 def provide_token(dialect, conn_rec, cargs, cparams):
-    cparams["token"] = get_db_auth_token()
+    cparams["password"] = get_db_auth_token()
 
 
 def inject_db():
