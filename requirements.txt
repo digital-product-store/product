@@ -1,6 +1,6 @@
 fastapi==0.103.2
 uvicorn[standard]==0.23.2
-pydantic==2.3.0
+pydantic==2.5.3
 SQLAlchemy==2.0.20
 psycopg2-binary==2.9.7
 elastic-apm==6.18.0
